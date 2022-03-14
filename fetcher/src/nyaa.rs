@@ -16,6 +16,12 @@ pub mod nyaa {
         pub download_count: i32,
     }
 
+    impl Display for Entry {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.write_str(self.name.as_str())
+        }
+    }
+
     const RESOLUTIONS: [&str; 6] = [
         "1080p",
         "720p",
@@ -25,7 +31,10 @@ pub mod nyaa {
         "144p",
     ];
 
+    use std::collections::HashMap;
     use std::error::Error;
+    use std::fmt::{Display, Formatter};
+    use std::iter::Map;
     use scraper::{Html, Selector};
 
     pub async fn search(query: &str) -> Result<Vec<Entry>, Box<dyn Error>> {
@@ -72,42 +81,76 @@ pub mod nyaa {
 
         Ok(entries)
     }
+    pub fn parse_entry_name(name:String, ep:i32) -> String {
+        let mut title_without_res = name.split(" ").filter(|x| {
+            let num = x.parse::<i32>();
+            if let Ok(n) = num {
+                return n == ep
+            }
+            return true
+        }  ).collect::<Vec<&str>>().join(" ");
+        for res in RESOLUTIONS.iter() {
+            let new_title = title_without_res.replace(res, "");
+            title_without_res = new_title.to_owned();
+        }
+       title_without_res.to_lowercase()
+    }
+    pub async fn search_ep_with_entries(entries:Vec<Entry>,show:&str,ep:i32) -> Result<Entry,String> {
 
-    pub async fn search_ep(show:&str, ep:i32) -> Result<Entry,String> {
-        let channel_possible = search(format!("{} {}", show, ep).as_str()).await;
         let mut best_item:Option<Entry> = None;
         let mut best_seeders:i32 = 0;
-        if let Ok(entries) = channel_possible {
-            for item in entries {
-                let mut title_without_res = item.name.split(" ").filter(|x| {
-                    let num = x.parse::<i32>();
-                    if let Ok(n) = num {
-                        return n == ep
-                    }
-                    return true
-                }  ).collect::<Vec<&str>>().join(" ");
-                for res in RESOLUTIONS.iter() {
-                    let new_title = title_without_res.replace(res, "");
-                    title_without_res = new_title.to_owned();
-                }
-
-                let title_lower = title_without_res.to_lowercase();
-                // println!("{} ({}) | searching for {:?} {}", title_lower,item.name,show,ep);
-                if title_lower.contains(&show.to_string().to_lowercase())
-                    && title_lower.contains(&format!("{}",ep))
-                    && item.seeders > best_seeders {
-                    println!("{} | found {:?} {}", title_without_res,show,ep);
-                    best_item = Some(item.clone());
-                    best_seeders = item.seeders;
-                }
+        for item in entries {
+            let title_lower = parse_entry_name(item.name.clone(),ep);
+            // println!("{} ({}) | searching for {:?} {}", title_lower,item.name,show,ep);
+            if title_lower.contains(&show.to_string().to_lowercase())
+                && title_lower.contains(&format!("{}",ep))
+                && item.seeders > best_seeders {
+                println!("{} | found {:?} {}", title_lower,show,ep);
+                best_item = Some(item.clone());
+                best_seeders = item.seeders;
             }
-        } else {
-            return Err(channel_possible.unwrap_err().to_string());
         }
         if let Some(item) = best_item {
             return Ok(item);
         }
         Err("No results found".to_string())
+    }
+    pub async fn search_ep(show:&str, ep:i32) -> Result<Entry,String> {
+        let channel_possible = search(format!("{} {}", show, ep).as_str()).await;
+        if let Ok(entries) = channel_possible {
+            search_ep_with_entries(entries, show, ep).await
+        } else {
+            Err("No results found".to_string())
+        }
+    }
+
+    pub async fn search_show(show:&str,total_eps:i32) -> Result<HashMap<i32,Entry>,String> {
+
+        let results_pos = search(show).await;
+
+        let mut eps:HashMap<i32,Entry> = HashMap::new();
+        if let Ok(results) = results_pos {
+            for entry in results {
+                let show_offset = entry.name.to_lowercase().find(&show.to_lowercase());
+                if show_offset.is_none() { continue; }
+                let show_offset = show_offset.unwrap()+show.len();
+                let ep = entry.name.splitn(show_offset," ").find(|x| x.chars().all(|c| c.is_numeric()));
+                // println!("{} > {:?} {:?}",entry.name,ep, show_offset);
+                if let Some(ep) = ep {
+                    let ep = ep.parse::<i32>().unwrap();
+                    println!("{} | {}", entry.name, ep);
+                    let entry_there = eps.get(&ep);
+                    if let Some(existing_entry) = entry_there {
+                        if existing_entry.seeders > entry.seeders || ep > total_eps {
+                            continue;
+                        }
+                    }
+                    eps.insert(ep,entry);
+                }
+            }
+        }
+
+        Ok(eps)
     }
 
 }
