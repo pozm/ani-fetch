@@ -173,19 +173,29 @@ pub mod nyaa {
         }
     }
 
-    pub async fn search_show(show:&str,total_eps:i32) -> Result<HashMap<i32,Entry>,String> {
+    pub async fn search_show(show:&str,total_eps:i32,season:Option<i32>) -> Result<HashMap<i32,Entry>,String> {
 
         let results_pos = search(show).await;
-
+		lazy_static! {
+			static ref RE: Regex = Regex::new(r#"(?mi)^(?P<uploader> ?\[.*?\])? ?(?P<series>[a-zA-Z-\s()]+?) (?P<seasonep>(?P<season>s\d+|season \d+)? ?-? ?(?P<ep>e\d+|\d+))"#).unwrap();
+		}
         let mut eps:HashMap<i32,Entry> = HashMap::new();
         if let Ok(results) = results_pos {
             for entry in results {
-                let show_offset = entry.name.to_lowercase().find(&show.to_lowercase());
-                if show_offset.is_none() { continue; }
-                let show_offset = show_offset.unwrap()+show.len();
-                let ep = entry.name.splitn(show_offset," ").find(|x| x.chars().all(|c| c.is_numeric()));
-                // println!("{} > {:?} {:?}",entry.name,ep, show_offset);
-                if let Some(ep) = ep {
+				let mut title_lower = "".to_string();
+				let mut got_ep = -1;
+				let mut got_sea = -1;
+				if let Some(caps) = RE.captures(&item.name) {
+					title_lower = (&caps)["series"].to_lowercase();
+					got_ep = i32::from_str_radix(&caps["ep"].chars().filter(|x| x.is_digit(10)).collect::<String>(),10).unwrap_or(-1);
+					// let got_sea = i32::from_str_radix(&caps["season"].chars().filter(|x| x.is_digit(10)).collect::<String>(),10).unwrap_or(-1);
+					if season.is_some() && let Some(m_got_season) = caps.name("season") {
+						let digits = m_got_season.as_str().chars().filter(|x| x.is_digit(10)).collect::<String>();
+						got_sea = i32::from_str_radix(&digits,10).unwrap_or(-1);
+					}
+					// println!("{} ({}) | searching for {:?} {}", title_lower,item.name,show,ep);
+				}
+				if let Some(ep) = ep {
                     let ep = ep.parse::<i32>().unwrap();
                     println!("{} | {}", entry.name, ep);
                     let entry_there = eps.get(&ep);
