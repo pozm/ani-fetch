@@ -23,7 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 **/*/target
+**/*/debug
+**/*/release
 **/*/node_modules
 **/*/yarn-error.log
 **/*/yarn.lock
 **/*/.idea
+**/*/CACHEDIR.TAG

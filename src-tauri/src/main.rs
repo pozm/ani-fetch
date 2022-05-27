@@ -5,7 +5,6 @@
 
 
 use tauri::{generate_handler, Manager, Window};
-use window_vibrancy::apply_acrylic;
 use fetcher::{json_struct::torrent_info::TorrentsInfo, nyaa::nyaa::{search_ep, Entry}};
 
 fn main() {
