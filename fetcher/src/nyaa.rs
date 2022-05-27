@@ -2,9 +2,16 @@
 
 
 
-
 pub mod nyaa {
-    #[derive(Debug, Clone)]
+    use std::collections::HashMap;
+    use std::error::Error;
+    use std::fmt::{Display, Formatter};
+    use std::iter::Map;
+    use scraper::{Html, Selector};
+    use serde::{Deserialize, Serialize};
+	use regex::Regex;
+    
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct Entry {
         pub category: String,
         pub name: String,
@@ -16,11 +23,11 @@ pub mod nyaa {
         pub download_count: i32,
     }
 
-    impl Display for Entry {
-        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-            f.write_str(self.name.as_str())
-        }
-    }
+    // impl Display for Entry {
+    //     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    //         f.write_str(self.name.as_str())
+    //     }
+    // }
 
     const RESOLUTIONS: [&str; 6] = [
         "1080p",
@@ -31,18 +38,38 @@ pub mod nyaa {
         "144p",
     ];
 
-    use std::collections::HashMap;
-    use std::error::Error;
-    use std::fmt::{Display, Formatter};
-    use std::iter::Map;
-    use scraper::{Html, Selector};
 
-    pub async fn search(query: &str) -> Result<Vec<Entry>, Box<dyn Error>> {
-        let url = format!("https://nyaa.si/?f=0&c=0_0&q={}&s=seeders&o=desc", query.replace(" ", "+"));
+	fn make_folder_list(html:&Html) {
+		let folder_selector = Selector::parse("body > div > div:nth-child(3) > div.torrent-file-list.panel-body > ul > li").unwrap();
+		let folder_select_many = Selector::parse("ul > li").unwrap();
+		let folder_name = Selector::parse("a").unwrap();
+		let folder_list = html.select(&folder_selector);
+		for element in folder_list {
+			let folder_name = element.select(&folder_name).next().unwrap().text().next().unwrap();
+			let children = element.select(&folder_select_many);
+			println!("V {:?} V\n{}",folder_name, children.map(|x| x.text().next().unwrap()).collect::<Vec<_>>().join("\n"));
+		}
+	}
+
+	pub async fn get_data(id:i32) -> Result<(), Box<dyn Error>> {
+		let url = format!("https://nyaa.si/view/{}", id);
+		println!("exec : {}", url);
+		let resp = reqwest::get(&url).await?
+			.text()
+			.await?;
+		let html = Html::parse_document(&resp);
+		make_folder_list(&html);
+		// println!("{:#?}", folder_list);
+		Ok(())
+
+	}
+
+    pub async fn search(query: &str) -> Result<Vec<Entry>, ()> {
+        let url = format!("https://nyaa.si/?f=0&c=1_2&q={}&s=seeders&o=desc", query.replace(" ", "+"));
         println!("exec : {}", url);
-        let resp = reqwest::get(&url).await?
+        let resp = reqwest::get(&url).await.unwrap()
             .text()
-            .await?;
+            .await.unwrap();
         let html = Html::parse_document(&resp);
         let mut entries = vec![];
 
@@ -81,29 +108,51 @@ pub mod nyaa {
 
         Ok(entries)
     }
-    pub fn parse_entry_name(name:String, ep:i32) -> String {
-        let mut title_without_res = name.split(" ").filter(|x| {
-            let num = x.parse::<i32>();
-            if let Ok(n) = num {
-                return n == ep
-            }
-            return true
-        }  ).collect::<Vec<&str>>().join(" ");
-        for res in RESOLUTIONS.iter() {
-            let new_title = title_without_res.replace(res, "");
-            title_without_res = new_title.to_owned();
-        }
-       title_without_res.to_lowercase()
-    }
-    pub async fn search_ep_with_entries(entries:Vec<Entry>,show:&str,ep:i32) -> Result<Entry,String> {
-
+    // pub fn parse_entry_name(name:String, ep:i32,season:Option<i32>) -> String {
+    // //     let mut title_without_res = name.split(" ").filter(|x| {
+    // //         let num = x.parse::<i32>();
+    // //         if let Ok(n) = num {
+    // //             return n == ep
+    // //         }
+    // //         return true
+    // //     }  ).collect::<Vec<&str>>().join(" ");
+    // //     for res in RESOLUTIONS.iter() {
+    // //         let new_title = title_without_res.replace(res, "");
+    // //         title_without_res = new_title.to_owned(); 
+    // //     }
+    // //    title_without_res.to_lowercase()
+	// 	lazy_static! {
+	// 		static ref RE: Regex = Regex::new(r#"(?mi)^(?<uploader> ?\[.*?\])? ?(?<series>[a-zA-Z-\s()]+?) (?<seasonep>(?<season>s\d+|season \d+)? ?-? ?(?<ep>e\d+|\d+))"#).unwrap();
+	// 	}
+	// 	let caps = RE.captures(&name).unwrap();
+	// 	let series = caps.name("series").unwrap().as_str();
+	// 	let ep = caps.name("ep").unwrap().as_str();
+	// 	let season = caps.name("season").unwrap().as_str();
+	// 	series.to_string()
+    // }
+    pub async fn search_ep_with_entries(entries:Vec<Entry>,show:&str,ep:i32,season:Option<i32>) -> Result<Entry,String> {
+		lazy_static! {
+			static ref RE: Regex = Regex::new(r#"(?mi)^(?P<uploader> ?\[.*?\])? ?(?P<series>[a-zA-Z-\s()]+?) (?P<seasonep>(?P<season>s\d+|season \d+)? ?-? ?(?P<ep>e\d+|\d+))"#).unwrap();
+		}
         let mut best_item:Option<Entry> = None;
         let mut best_seeders:i32 = 0;
         for item in entries {
-            let title_lower = parse_entry_name(item.name.clone(),ep);
-            // println!("{} ({}) | searching for {:?} {}", title_lower,item.name,show,ep);
+			let mut title_lower = "".to_string();
+			let mut got_ep = -1;
+			let mut got_sea = -1;
+            if let Some(caps) = RE.captures(&item.name) {
+				title_lower = (&caps)["series"].to_lowercase();
+				got_ep = i32::from_str_radix(&caps["ep"].chars().filter(|x| x.is_digit(10)).collect::<String>(),10).unwrap_or(-1);
+				// let got_sea = i32::from_str_radix(&caps["season"].chars().filter(|x| x.is_digit(10)).collect::<String>(),10).unwrap_or(-1);
+				if season.is_some() && let Some(m_got_season) = caps.name("season") {
+					let digits = m_got_season.as_str().chars().filter(|x| x.is_digit(10)).collect::<String>();
+					got_sea = i32::from_str_radix(&digits,10).unwrap_or(-1);
+				}
+				// println!("{} ({}) | searching for {:?} {}", title_lower,item.name,show,ep);
+			}
             if title_lower.contains(&show.to_string().to_lowercase())
-                && title_lower.contains(&format!("{}",ep))
+                && got_ep == ep
+				&& if season.is_some() {got_sea == season.unwrap()} else {true}
                 && item.seeders > best_seeders {
                 println!("{} | found {:?} {}", title_lower,show,ep);
                 best_item = Some(item.clone());
@@ -115,10 +164,10 @@ pub mod nyaa {
         }
         Err("No results found".to_string())
     }
-    pub async fn search_ep(show:&str, ep:i32) -> Result<Entry,String> {
+    pub async fn search_ep(show:&str, ep:i32,season:Option<i32>) -> Result<Entry,String> {
         let channel_possible = search(format!("{} {}", show, ep).as_str()).await;
         if let Ok(entries) = channel_possible {
-            search_ep_with_entries(entries, show, ep).await
+            search_ep_with_entries(entries, show, ep,season).await
         } else {
             Err("No results found".to_string())
         }
@@ -146,7 +195,16 @@ pub mod nyaa {
                         }
                     }
                     eps.insert(ep,entry);
-                }
+                } else {
+					println!("{} | no ep (attempting to all in 1 😎)", entry.name);
+					let entry_there = eps.get(&0);
+					if let Some(existing_entry) = entry_there {
+						if existing_entry.seeders > entry.seeders {
+							continue;
+						}
+					}
+
+				}
             }
         }
 
