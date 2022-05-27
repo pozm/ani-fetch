@@ -13,13 +13,16 @@ async fn main() {
     // } else {
     //     println!("{:?}", ep_pos);
     // }
+	let show_name = "Spy x Family";
+	let show_eps = 7;
+	let show_season: Option<i32> = None;
 
-    let eps = search_show("Summertime rendering", 7,None).await;
+    let eps = search_show(show_name, show_eps,show_season).await;
     if let Ok(eps) = eps {
-        // let links = eps.iter().map(|ep| ep.1.link.as_str()).collect::<Vec<&str>>();
-        let names = eps.iter().map(|ep| (ep.1.name.as_str(),ep.1.seeders)).collect::<Vec<(&str,i32)>>();
+        let links = eps.iter().map(|ep| ep.1.link.as_str()).collect::<Vec<&str>>();
+        let names = eps.iter().map(|ep| (ep.1.name.as_str(),ep.1.seeders,ep.1.matched_title.as_str())).collect::<Vec<(&str,i32,&str)>>();
         println!("{:#?}",names);
-        // download_torrents_str(links, "localhost:1112").await;
+        download_torrents_str(links, "localhost:1112",Some(format!("D:\\pog\\anime\\{}\\Season {}",names.first().unwrap().2,show_season.unwrap_or(1)))).await;
     } else {
         println!("{:?}", eps);
     }

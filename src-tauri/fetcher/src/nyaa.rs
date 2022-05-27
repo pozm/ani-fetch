@@ -21,6 +21,7 @@ pub mod nyaa {
         pub seeders: i32,
         pub leechers: i32,
         pub download_count: i32,
+		pub matched_title: String
     }
 
     // impl Display for Entry {
@@ -102,6 +103,7 @@ pub mod nyaa {
                 leechers:leeches.parse().unwrap(),
                 download_count:downloads.parse().unwrap(),
                 category: "".to_string(),
+				matched_title: "".to_string()
             };
             entries.push(entry);
         }
@@ -136,12 +138,12 @@ pub mod nyaa {
 		}
         let mut best_item:Option<Entry> = None;
         let mut best_seeders:i32 = 0;
-        for item in entries {
-			let mut title_lower = "".to_string();
+        for mut item in entries {
+			let mut title_full = "".to_string();
 			let mut got_ep = -1;
 			let mut got_sea = -1;
             if let Some(caps) = RE.captures(&item.name) {
-				title_lower = (&caps)["series"].to_lowercase();
+				title_full = caps["series"].to_string();
 				got_ep = i32::from_str_radix(&caps["ep"].chars().filter(|x| x.is_digit(10)).collect::<String>(),10).unwrap_or(-1);
 				// let got_sea = i32::from_str_radix(&caps["season"].chars().filter(|x| x.is_digit(10)).collect::<String>(),10).unwrap_or(-1);
 				if season.is_some() && let Some(m_got_season) = caps.name("season") {
@@ -150,11 +152,12 @@ pub mod nyaa {
 				}
 				// println!("{} ({}) | searching for {:?} {}", title_lower,item.name,show,ep);
 			}
-            if title_lower.contains(&show.to_string().to_lowercase())
+            if title_full.to_lowercase().contains(&show.to_string().to_lowercase())
                 && got_ep == ep
 				&& if season.is_some() {got_sea == season.unwrap()} else {true}
                 && item.seeders > best_seeders {
-                println!("{} | found {:?} {}", title_lower,show,ep);
+                println!("{} | found {:?} {}", title_full,show,ep);
+				item.matched_title = title_full;
                 best_item = Some(item.clone());
                 best_seeders = item.seeders;
             }
@@ -181,12 +184,12 @@ pub mod nyaa {
 		}
         let mut eps:HashMap<i32,Entry> = HashMap::new();
         if let Ok(results) = results_pos {
-            for entry in results {
-				let mut title_lower = "".to_string();
+            for mut entry in results {
+				let mut title_full = "".to_string();
 				let mut got_ep = -1;
 				let mut got_sea = -1;
 				if let Some(caps) = RE.captures(&entry.name) {
-					title_lower = (&caps)["series"].to_lowercase();
+					title_full = (&caps)["series"].to_string();
 					got_ep = i32::from_str_radix(&caps["ep"].chars().filter(|x| x.is_digit(10)).collect::<String>(),10).unwrap_or(-1);
 					// let got_sea = i32::from_str_radix(&caps["season"].chars().filter(|x| x.is_digit(10)).collect::<String>(),10).unwrap_or(-1);
 					if season.is_some() && let Some(m_got_season) = caps.name("season") {
@@ -195,16 +198,18 @@ pub mod nyaa {
 					}
 					// println!("{} ({}) | searching for {:?} {}", title_lower,item.name,show,ep);
 				}
-				println!("{} -> t: {} s:{} e:{} vs s: {:?} te: {}", entry.name, title_lower,got_sea,got_ep,season,total_eps);
-				if got_ep == -1 || got_ep > total_eps {continue;}
+				// println!("{} -> t: {} s:{} e:{} vs s: {:?} te: {}", entry.name, title_lower,got_sea,got_ep,season,total_eps);
+				if got_ep == -1 || got_ep > total_eps || !title_full.to_lowercase().contains(&show.to_string().to_lowercase()) {continue;}
 				let entry_there = eps.get(&got_ep);
 				if let Some(existing_entry) = entry_there {
 					if existing_entry.seeders > entry.seeders || if season.is_some() {got_sea != season.unwrap()} else {true} {
 						continue;
 					} else {
+						entry.matched_title = title_full;
 						eps.insert(got_ep,entry);
 					}
 				} else {
+					entry.matched_title = title_full;
 					eps.insert(got_ep,entry);
 				}
                 // } else {
