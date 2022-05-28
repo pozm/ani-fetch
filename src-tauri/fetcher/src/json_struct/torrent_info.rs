@@ -80,7 +80,7 @@ pub struct TorrentInfo {
     magnet_uri: String,
 
     #[serde(rename = "max_ratio")]
-    max_ratio: i64,
+    max_ratio: f64,
 
     #[serde(rename = "max_seeding_time")]
     max_seeding_time: i64,
@@ -107,7 +107,7 @@ pub struct TorrentInfo {
     progress: i64,
 
     #[serde(rename = "ratio")]
-    ratio: i64,
+    ratio: f64,
 
     #[serde(rename = "ratio_limit")]
     ratio_limit: i64,

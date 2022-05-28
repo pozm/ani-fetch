@@ -5,7 +5,7 @@
 
 
 use tauri::{generate_handler, Manager, Window};
-use fetcher::{json_struct::torrent_info::TorrentsInfo, nyaa::nyaa::{search_ep, Entry}};
+use fetcher::{json_struct::torrent_info::TorrentsInfo, nyaa::nyaa::{search_ep, Entry, search_show}};
 
 fn main() {
   tauri::Builder::default()
@@ -33,11 +33,28 @@ async fn get_torrents() -> Result<TorrentsInfo,Vec<()>> {
 }
 
 #[tauri::command(async)]
-async fn search_torrent(window:Window,series: String,ep:i32)-> Result<Entry,String> {
+async fn search_torrent(window:Window,series: String,ep:i32,season:Option<i32>,search_type:i32)-> Result<Vec<Entry>,String> {
 	// std::thread::spawn(move || async {
 	// 	window.emit("search_torrent_result",search_ep(&series, ep).await);
 	// });
-	search_ep(&series, ep,None).await
+
+	if search_type == 0 {
+		if let Ok(fep) = search_ep(&series, ep,season).await {
+			Ok(vec![fep])
+		} else {
+			Err("error".to_string())
+		}
+
+	} else if search_type == 1 {
+		if let Ok(feps) = search_show(&series,ep,season).await {
+			Ok(feps.values().cloned().collect())
+		} else {
+			Err("error".to_string())
+		}
+	} else {
+		Err("error".to_string())
+	}
+
 }
 
 #[tauri::command(async)]
