@@ -19,7 +19,7 @@ fn main() {
 		  Ok(())
 	  })
 	  .plugin(tauri_plugin_store::PluginBuilder::default().build())
-	  .invoke_handler(generate_handler![get_torrents,open_in_mpv,search_torrent])
+	  .invoke_handler(generate_handler![get_torrents,open_in_mpv,search_torrent,download_torrents])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
@@ -33,12 +33,18 @@ async fn get_torrents() -> Result<TorrentsInfo,Vec<()>> {
 }
 
 #[tauri::command(async)]
+async fn download_torrents(torrents: Vec<String>,download_to:String) -> u16 {
+	fetcher::qbit::QBitClient::instance.download_torrents(torrents, Some(download_to)).await
+}
+
+#[tauri::command(async)]
 async fn search_torrent(window:Window,series: String,ep:i32,season:Option<i32>,search_type:i32)-> Result<Vec<Entry>,String> {
 	// std::thread::spawn(move || async {
 	// 	window.emit("search_torrent_result",search_ep(&series, ep).await);
 	// });
 
 	if search_type == 0 {
+		println!("searching ep {ep} of {series} | {season:?}");
 		if let Ok(fep) = search_ep(&series, ep,season).await {
 			Ok(vec![fep])
 		} else {
@@ -47,6 +53,7 @@ async fn search_torrent(window:Window,series: String,ep:i32,season:Option<i32>,s
 
 	} else if search_type == 1 {
 		if let Ok(feps) = search_show(&series,ep,season).await {
+			println!("search many eps of {series}:{ep} | {season:?} -> {}",feps.len());
 			Ok(feps.values().cloned().collect())
 		} else {
 			Err("error".to_string())

@@ -4,17 +4,17 @@ use fetcher::qbit::qbit::{download_torrent, download_torrents, download_torrents
 #[tokio::main]
 async fn main() {
 
-    let ep_pos = search_ep("spy x family",8,None).await;
+    let ep_pos = search_ep("summertime render",8,None).await;
     
     if let Ok(ep) = ep_pos {
         println!("{:#?}", ep);
-        // let status = download_torrent(ep.link.as_str(),"localhost:8080",Some(format!("D:\\pog\\anime\\{}\\Season {}",ep.matched_title,1))).await;
-        // println!("{:?}", status);
+        let status = download_torrent(ep.link.as_str(),"localhost:1111",Some(format!("D:\\pog\\anime\\{}\\Season {}",ep.matched_title,1))).await;
+        println!("{:?}", status);
     } else {
         println!("err {:?}", ep_pos);
     }
-	// let show_name = "Spy x Family";
-	// let show_eps = 7;
+	// let show_name = "Tomodachi Game";
+	// let show_eps = 9;
 	// let show_season: Option<i32> = None;
 
     // let eps = search_show(show_name, show_eps,show_season).await;

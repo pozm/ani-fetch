@@ -50,3 +50,27 @@ export interface Torrent {
     uploaded_session: number;
     upspeed: number;
 }
+
+export declare module matchedData {
+
+	export interface Metadata {
+		title:string,
+		ep:number,
+		season?:number,
+		uploader?:string,
+	}
+
+    export interface RootObject {
+        category: string;
+        date: string;
+        download_count: number;
+        leechers: number;
+        link: string;
+        metadata?: Metadata;
+        name: string;
+        seeders: number;
+        size: string;
+    }
+
+}
+

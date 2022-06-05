@@ -12,6 +12,25 @@ pub mod nyaa {
 	use regex::Regex;
     
     #[derive(Debug, Clone, Serialize, Deserialize)]
+	pub struct EntryMetadata {
+		title: String,
+		ep: i32,
+		season: Option<i32>,
+		uploader: Option<String>,
+	}
+
+	impl EntryMetadata {
+		pub fn new(title:String,ep:i32,season:Option<i32>,uploader:Option<String>) -> Self {
+			Self{
+				title,
+				ep,
+				season,
+				uploader,
+			}
+		}
+	}
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct Entry {
         pub category: String,
         pub name: String,
@@ -21,7 +40,7 @@ pub mod nyaa {
         pub seeders: i32,
         pub leechers: i32,
         pub download_count: i32,
-		pub matched_title: String
+		pub metadata: Option<EntryMetadata>,
     }
 
     // impl Display for Entry {
@@ -38,7 +57,9 @@ pub mod nyaa {
         "240p",
         "144p",
     ];
-
+	lazy_static! {
+		static ref RE: Regex = Regex::new(r#"(?mi)^( ?\[(?P<uploader>.*?)\])? ?(?P<series>[a-zA-Z-\s()]+?) (?P<seasonep>(?P<season>s\d+|season \d+)? ?-? ?(?P<ep>e\d+|\d+))"#).unwrap();
+	}
 
 	fn make_folder_list(html:&Html) {
 		let folder_selector = Selector::parse("body > div > div:nth-child(3) > div.torrent-file-list.panel-body > ul > li").unwrap();
@@ -103,7 +124,7 @@ pub mod nyaa {
                 leechers:leeches.parse().unwrap(),
                 download_count:downloads.parse().unwrap(),
                 category: "".to_string(),
-				matched_title: "".to_string()
+				metadata: None,
             };
             entries.push(entry);
         }
@@ -133,15 +154,16 @@ pub mod nyaa {
 	// 	series.to_string()
     // }
     pub async fn search_ep_with_entries(entries:Vec<Entry>,show:&str,ep:i32,season:Option<i32>) -> Result<Entry,String> {
-		lazy_static! {
-			static ref RE: Regex = Regex::new(r#"(?mi)^(?P<uploader> ?\[.*?\])? ?(?P<series>[a-zA-Z-\s()]+?) (?P<seasonep>(?P<season>s\d+|season \d+)? ?-? ?(?P<ep>e\d+|\d+))"#).unwrap();
-		}
+		// lazy_static! {
+		// 	static ref RE: Regex = Regex::new(r#"(?mi)^(?P<uploader> ?\[.*?\])? ?(?P<series>[a-zA-Z-\s()]+?) (?P<seasonep>(?P<season>s\d+|season \d+)? ?-? ?(?P<ep>e\d+|\d+))"#).unwrap();
+		// }
         let mut best_item:Option<Entry> = None;
         let mut best_seeders:i32 = 0;
         for mut item in entries {
 			let mut title_full = "".to_string();
 			let mut got_ep = -1;
 			let mut got_sea = -1;
+			let mut uploader: Option<String> = None;
             if let Some(caps) = RE.captures(&item.name) {
 				title_full = caps["series"].to_string();
 				got_ep = i32::from_str_radix(&caps["ep"].chars().filter(|x| x.is_digit(10)).collect::<String>(),10).unwrap_or(-1);
@@ -150,6 +172,11 @@ pub mod nyaa {
 					let digits = m_got_season.as_str().chars().filter(|x| x.is_digit(10)).collect::<String>();
 					got_sea = i32::from_str_radix(&digits,10).unwrap_or(-1);
 				}
+				uploader = match caps.name("uploader") {
+					Some(m_uploader) => Some(m_uploader.as_str().to_string()),
+					None => None,
+				}
+				
 				// println!("{} ({}) | searching for {:?} {}", title_lower,item.name,show,ep);
 			}
             if title_full.to_lowercase().contains(&show.to_string().to_lowercase())
@@ -157,7 +184,7 @@ pub mod nyaa {
 				&& if season.is_some() {got_sea == season.unwrap()} else {true}
                 && item.seeders > best_seeders {
                 println!("{} | found {:?} {}", title_full,show,ep);
-				item.matched_title = title_full;
+				item.metadata = Some(EntryMetadata::new(title_full, got_ep, season, uploader));
                 best_item = Some(item.clone());
                 best_seeders = item.seeders;
             }
@@ -168,7 +195,7 @@ pub mod nyaa {
         Err("No results found".to_string())
     }
     pub async fn search_ep(show:&str, ep:i32,season:Option<i32>) -> Result<Entry,String> {
-        let channel_possible = search(format!("{} {}", show, ep).as_str()).await;
+        let channel_possible = search(format!("{} {} {}", show,if season.is_some() {format!("S{}",season.unwrap())} else {"".to_string()}, ep).as_str()).await;
         if let Ok(entries) = channel_possible {
             search_ep_with_entries(entries, show, ep,season).await
         } else {
@@ -178,16 +205,14 @@ pub mod nyaa {
 
     pub async fn search_show(show:&str,total_eps:i32,season:Option<i32>) -> Result<HashMap<i32,Entry>,String> {
 
-        let results_pos = search(show).await;
-		lazy_static! {
-			static ref RE: Regex = Regex::new(r#"(?mi)^(?P<uploader> ?\[.*?\])? ?(?P<series>[a-zA-Z-\s()]+?) (?P<seasonep>(?P<season>s\d+|season \d+)? ?-? ?(?P<ep>e\d+|\d+))"#).unwrap();
-		}
+        let results_pos = search(format!("{} {}",show,if season.is_some() {format!("S{}",season.unwrap())} else {"".to_string()}).as_str()).await;
         let mut eps:HashMap<i32,Entry> = HashMap::new();
         if let Ok(results) = results_pos {
             for mut entry in results {
 				let mut title_full = "".to_string();
 				let mut got_ep = -1;
 				let mut got_sea = -1;
+				let mut uploader: Option<String> = None;
 				if let Some(caps) = RE.captures(&entry.name) {
 					title_full = (&caps)["series"].to_string();
 					got_ep = i32::from_str_radix(&caps["ep"].chars().filter(|x| x.is_digit(10)).collect::<String>(),10).unwrap_or(-1);
@@ -195,6 +220,10 @@ pub mod nyaa {
 					if season.is_some() && let Some(m_got_season) = caps.name("season") {
 						let digits = m_got_season.as_str().chars().filter(|x| x.is_digit(10)).collect::<String>();
 						got_sea = i32::from_str_radix(&digits,10).unwrap_or(-1);
+					}
+					uploader = match caps.name("uploader") {
+						Some(m_uploader) => Some(m_uploader.as_str().to_string()),
+						None => None,
 					}
 					// println!("{} ({}) | searching for {:?} {}", title_lower,item.name,show,ep);
 				}
@@ -205,11 +234,11 @@ pub mod nyaa {
 					if existing_entry.seeders > entry.seeders || if season.is_some() {got_sea != season.unwrap()} else {true} {
 						continue;
 					} else {
-						entry.matched_title = title_full;
+						entry.metadata = Some(EntryMetadata::new(title_full, got_ep, season, uploader));
 						eps.insert(got_ep,entry);
 					}
 				} else {
-					entry.matched_title = title_full;
+					entry.metadata = Some(EntryMetadata::new(title_full, got_ep, season, uploader));
 					eps.insert(got_ep,entry);
 				}
                 // } else {

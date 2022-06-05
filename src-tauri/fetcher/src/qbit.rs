@@ -43,7 +43,7 @@ impl<'a> QBitClient<'a> {
             host: host,
         }
     }
-    pub const instance: QBitClient<'static> = QBitClient::new("localhost:1112");
+    pub const instance: QBitClient<'static> = QBitClient::new("localhost:1111");
     pub fn set_host(&mut self, host: &'a str) {
         self.host = host;
     }
