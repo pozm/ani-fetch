@@ -11,8 +11,8 @@ fn main() {
   tauri::Builder::default()
 	  .setup(|app| {
 		  let window = app.get_window("main").unwrap();
-		  #[cfg(target_os = "macos")]
-		  apply_vibrancy(&window, NSVisualEffectMaterial::AppearanceBased).unwrap();
+		//   #[cfg(target_os = "macos")]
+		//   apply_vibrancy(&window, NSVisualEffectMaterial::AppearanceBased).unwrap();
 
 		//   #[cfg(target_os = "windows")]
 		//   apply_acrylic(&window, None).unwrap();

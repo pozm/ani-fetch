@@ -58,7 +58,7 @@ pub mod nyaa {
         "144p",
     ];
 	lazy_static! {
-		static ref RE: Regex = Regex::new(r#"(?mi)^( ?\[(?P<uploader>.*?)\])? ?(?P<series>[a-zA-Z-\s()]+?) (?P<seasonep>(?P<season>s\d+|season \d+)? ?-? ?(?P<ep>e\d+|\d+))"#).unwrap();
+		static ref RE: Regex = Regex::new(r#"(?mi)^( ?\[(?P<uploader>.*?)\])? ?(?P<series>[a-zA-Z-,./"':!&\s()]+?) (?P<seasonep>(?P<season>s\d+|season \d+)? ?-? ?(?P<ep>e\d+|\d+))"#).unwrap();
 	}
 
 	fn make_folder_list(html:&Html) {
