@@ -26,7 +26,7 @@ pub struct TorrentInfo {
     auto_tmm: bool,
 
     #[serde(rename = "availability")]
-    availability: i64,
+    availability: f64,
 
     #[serde(rename = "category")]
     category: String,
@@ -104,7 +104,7 @@ pub struct TorrentInfo {
     priority: i64,
 
     #[serde(rename = "progress")]
-    progress: i64,
+    progress: f64,
 
     #[serde(rename = "ratio")]
     ratio: f64,
